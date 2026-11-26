@@ -1,1 +1,11 @@
-# Relay Glue
+# 本地运行生成的数据
+.relay-run.json
+blackboard/runs/
+blackboard/tasks/*
+!blackboard/tasks/example-001/
+!blackboard/tasks/example-001/**
+*.bak*
+
+# 打包副本与依赖
+relay-glue/
+node_modules/

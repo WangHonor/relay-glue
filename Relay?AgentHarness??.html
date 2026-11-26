@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Relay × Agent Harness · 定位对比</title>
+<style>
+:root{--bg:#f0f2f5;--card:#fff;--text:#1f2329;--muted:#8a9099;--border:#eceef1;--line:#f2f3f5;--blue:#1677ff;--ok:#16a34a;--warn:#d9822b;--danger:#dc2626;--purple:#7c5cff}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;margin:0;font-size:14px;line-height:1.6}
+.wrap{max-width:1120px;margin:0 auto;padding:24px}
+h1{font-size:22px;margin:0 0 4px}
+.lead{color:var(--muted);font-size:13px;margin-bottom:20px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.card>h2{font-size:16px;margin:0 0 14px;padding-left:10px;border-left:3px solid var(--blue)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{background:#f5f8ff;border:1px solid #dfe8ff;color:#2b4a86;border-radius:8px;padding:6px 12px;font-size:13px}
+.chip b{color:var(--blue)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:500;background:#fafbfc}
+tr:last-child td{border-bottom:none}
+code{background:#f2f3f5;border-radius:5px;padding:1px 6px;font-family:'SFMono-Regular',Consolas,monospace;font-size:12px}
+.mono{font-family:'SFMono-Regular',Consolas,monospace;font-size:12px;color:#3a3f45}
+.dim{color:var(--muted);font-size:12px}
+pre{background:#1f2329;color:#e6e8eb;border-radius:10px;padding:16px 18px;overflow:auto;font-family:'SFMono-Regular',Consolas,monospace;font-size:12.5px;line-height:1.55;margin:0}
+pre .c{color:#7f8792}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.box{border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#fafbfc}
+.box h3{margin:0 0 8px;font-size:13.5px}
+.box ul{margin:0;padding-left:18px;font-size:13px}
+.box li{margin:3px 0}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+.kv:last-child{border-bottom:none}
+.kv span{color:var(--muted)}
+.note{background:#fff8ec;border:1px solid #f0d9a8;border-radius:8px;padding:10px 12px;font-size:13px;color:#7a5a1a}
+.note b{color:#6b4c12}
+.foot{color:var(--muted);font-size:12px;text-align:center;margin-top:8px}
+.mark{display:inline-block;padding:1px 9px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap}
+.m-self{background:#e6f4ff;color:#0958a8;border:1px solid #b7d7ff}
+.m-part{background:#fff7e6;color:#a15c00;border:1px solid #ffd591}
+.m-deleg{background:#eaf7ee;color:#237804;border:1px solid #b7eb8f}
+.m-no{background:#fff1f0;color:#a8071a;border:1px solid #ffa39e}
+.src{font-size:12px;color:var(--muted);margin-top:10px}
+</style></head><body><div class="wrap">
+<h1>Relay × Agent Harness · 定位对比与差异分析</h1>
+<div class="lead">对照标尺：业界通用义「agent harness」（模型之外的运行时与控制层）· 项目路径 <code>D:\Tools\qianwen\relay-glue</code></div>
+
+<div class="card"><h2>结论速览</h2>
+<div class="grid2">
+<div class="box"><h3>① 两者不是竞品，是上下游</h3><ul>
+<li><b>harness</b> 管「<b>一个</b> agent 内部怎么跑」：模型循环、上下文装配、工具执行、权限、停止条件。</li>
+<li><b>Relay（relay-glue）</b> 管「<b>多个</b> agent 之间怎么交接、怎么被管」：契约、闸门、记账、分诊、回放。</li>
+<li>Relay 自己<b>不调模型</b>（<code>server/</code> 内零 anthropic/openai/api key，已核），它是<b>编排域的 harness</b>，位于各 worker 自带 harness 的<b>上游/旁路</b>。</li>
+</ul></div>
+<div class="box"><h3>② 五支柱覆盖：3 根自建 · 2 根外包</h3><ul>
+<li><span class="mark m-self">本项目实现</span> Loop Discipline（显式重试/续跑/停链/预算停）</li>
+<li><span class="mark m-self">本项目实现</span> Policy Enforcement（三档安全闸门 + 人工确认）</li>
+<li><span class="mark m-self">本项目实现</span> Context Lifecycle（黑板状态 + 交接契约校验）</li>
+<li><span class="mark m-deleg">外包给 worker</span> Context Assembly（worker 自己的上下文）</li>
+<li><span class="mark m-part">部分覆盖</span> Tool Integrity（跨应用靠适配器 + 分诊兜底）</li>
+</ul></div>
+<div class="box"><h3>③ 最大的结构性缺口</h3><ul>
+<li>元宝<b>没有 harness</b>（纯 GUI），它是整条链里唯一「无运行时护栏」的环节 → 只能靠 <code>ensureInput()</code> 自愈 + 安全闸门兜底。</li>
+<li>模型驱动的<b>反思重规划</b>仍未实现（补强①已让模型能改链，但还做不到 harness 那种自由决策下一步）。</li>
+</ul></div>
+<div class="box"><h3>④ 选型一句话</h3><ul>
+<li>想把<b>一个</b> agent 跑好 → 用 harness。</li>
+<li>想把<b>几个已在跑的 agent</b> 拼成一条可信、可管、可查账的流水线 → 用本项目。</li>
+<li>现实分工：WorkBuddy / CodeBuddy 各自是 harness，Relay 是它们之间的胶水 + 治理面。</li>
+</ul></div>
+</div>
+</div>
+
+<div class="card"><h2>一、标尺：业界说的「agent harness」是什么</h2>
+<table><thead><tr><th style="width:150px">来源</th><th>定义要点</th></tr></thead><tbody>
+<tr><td>Microsoft Agent Framework 文档</td><td>harness 是<b>把语言模型变成能干活 agent 的运行时脚手架</b>：驱动模型与工具调用、管理会话状态与上下文、施加审批策略、让 agent 在多步任务中持续推进。典型能力：函数调用（含每次请求的迭代上限）、历史持久化、上下文压缩、Todo/计划跟踪、工具审批与自动审批规则、可观测性、后台子智能体、Shell 执行、<b>有界循环</b>。</td></tr>
+<tr><td>社区「五支柱」框架</td><td>① Context Assembly 上下文装配　② Tool Integrity 工具完整性（调用前 schema 校验 + 可行动错误）　③ Loop Discipline 循环纪律（<b>显式</b> continue/retry/halt 信号，而非启发式）　④ Policy Enforcement 策略执行（每次调用过权限门）　⑤ Context Lifecycle 上下文生命周期（上下文当作有限、可枯竭的资源主动管理）。</td></tr>
+<tr><td>中文工程系列（业界共识）</td><td>AI Harness = 围绕模型、上下文、工具与 Agent Loop 搭建的<b>运行与控制层</b>：上下文管理 / 任务循环 / 工具管理 / 任务状态 / 权限控制 / 沙箱 / 重试恢复 / 日志追踪 / 人工确认。并强调<b>硬停止条件</b>：max_steps、max_retries、timeout、token_budget、cost_budget、explicit_finish、fatal_error。</td></tr>
+</tbody></table>
+<div class="src">标尺要点：harness 的本质是「<b>模型之外</b>那层让 AI 系统可靠、可控、可恢复的运行时」；判断一个系统是否 harness，看它有没有<b>上下文装配 / 工具校验 / 循环纪律 / 权限门 / 硬停止</b>这五件事。</div>
+</div>
+
+<div class="card"><h2>二、定位关系图</h2>
+<pre>┌─ WorkBuddy（<b>agent harness</b> · 模型驱动）──────────────────────────┐
+│  决策：要调 run_chain 吗？要不要 approve？看 repairPrompt 吗？        │
+└───────────────┬──────────────────────────────────────────────────────┘
+                │  MCP（stdio / SSE，两条通道共用 core.handleMessage）
+┌───────────────▼──────────────────────────────────────────────────────┐
+│ Relay / relay-glue（<b>编排域 harness</b> · 流水线 + 规则驱动）        │
+│  chain.js 阶段链 · pipeline.json 业务事项+版本 · safety 闸门           │
+│  cost 记账降级 · repair 分诊 · blackboard 状态 · cockpit 指挥台        │
+└───┬───────────────┬────────────────┬────────────────────────────────┘
+    │ CLI           │ CDP(浏览器)     │ code CLI
+┌───▼────────┐ ┌────▼──────────┐ ┌─────▼──────┐
+│ CodeBuddy  │ │ 元宝           │ │ VSCode     │
+│ 自带 harness│ │ <b>无 harness</b>│ │ 人机界面   │
+│ (模型+工具) │ │ 纯 GUI，最弱环 │ │ (人审阅)   │
+└────────────┘ └───────────────┘ └────────────┘</pre>
+<div class="note"><b>关键读法：</b>系统里有<b>两层 loop</b>。外层是 WorkBuddy 的 harness loop（模型决定调不调、调用哪个工具）；内层是 Relay 的 pipeline loop（规则决定链内下一步交给谁）。Relay 不替代 harness，它<b>替 harness 管住跨应用的那一段</b>。</div>
+</div>
+
+<div class="card"><h2>三、五支柱逐项对照</h2>
+<table><thead><tr><th style="width:130px">支柱</th><th style="width:250px">通用 harness 里的实现</th><th style="width:250px">Relay 的对应实现</th><th style="width:120px">覆盖判定</th></tr></thead><tbody>
+<tr><td><b>Context Assembly</b><br>上下文装配</td><td>system prompt / 检索结果 / 工具输出 / 记忆，按预算拼进本轮输入；超限则压缩摘要</td><td><code>roles.js</code> 身份卡 persona 前缀 + <code>chain.js</code> 上游 <code>result.md</code> 注入下游 goal</td><td><span class="mark m-deleg">外包给 worker</span><br>本项目只做「跨应用交接」这一段</td></tr>
+<tr><td><b>Tool Integrity</b><br>工具完整性</td><td>调用前 schema 校验、参数校验、返回可行动的错误信息</td><td><code>core.js</code> TOOLS schema + <code>adapters.js</code> 适配层归一 + <code>repair.js</code> 失败分诊（把「工具坏了」翻译成人能修的提示）</td><td><span class="mark m-part">部分覆盖</span><br>跨应用侧做了，单应用内部靠 worker</td></tr>
+<tr><td><b>Loop Discipline</b><br>循环纪律</td><td>显式 continue/retry/halt 信号 + 硬停止（max_steps / timeout / budget / finish）</td><td><code>chain.js</code> 显式重试上限、断点续跑、<code>halted@worker_fail</code> 停链；<code>cost.js</code> 超预算自动降级并终止开销</td><td><span class="mark m-self">本项目实现</span><br>跨应用域无人替你做</td></tr>
+<tr><td><b>Policy Enforcement</b><br>策略执行</td><td>每次工具调用过权限门，副作用前确认</td><td><code>safety.js</code> 三档闸门（拦截 / 待确认 / 自动放行）+ 操作型腿默认待确认 + 不可逆词识别</td><td><span class="mark m-self">本项目实现</span></td></tr>
+<tr><td><b>Context Lifecycle</b><br>上下文生命周期</td><td>上下文当有限资源管理：裁剪、摘要、清理</td><td><code>blackboard/</code> 磁盘状态（契约 / result / run-log / status / cost）+ <b>上下文交接完整性校验</b>（上游内容是否真进下游）</td><td><span class="mark m-self">本项目实现</span><br>单 agent 的上下文生命周期仍由 worker 管</td></tr>
+</tbody></table>
+<div class="dim" style="margin-top:10px">「上下文交接完整性校验」是单 agent harness 里<b>不存在</b>的概念——单 agent 不需要把产出交接给别人。Relay 的差异化本质就在这一格。</div>
+</div>
+
+<div class="card"><h2>四、能力矩阵</h2>
+<table><thead><tr><th style="width:140px">维度</th><th style="width:300px">agent harness</th><th>本项目 Relay</th></tr></thead><tbody>
+<tr><td>管理对象</td><td>单 agent 内部</td><td>多 agent 之间（跨应用、跨形态、跨厂商）</td></tr>
+<tr><td>是否持有模型</td><td>是，核心职责</td><td><b>否</b>（零模型调用；钱花在别人家的模型里）</td></tr>
+<tr><td>状态位置</td><td>进程内存（会话内）</td><td>磁盘黑板 → 断点续跑 / 幂等跳过 / 可回放 / 可审计</td></tr>
+<tr><td>下一步由谁决定</td><td><b>模型</b>（ReAct）</td><td><b>人配的流水线版本</b>（<code>pipeline.json</code>，当前版本驱动）</td></tr>
+<tr><td>失败语义</td><td>抛回模型自愈</td><td>分诊成 8 类根因 → <b>生成给人工的修复提示词</b>（<code>repair.js</code>）</td></tr>
+<tr><td>人工介入</td><td>单点即时 permission prompt</td><td>三档闸门 + 按步确认 + 一键接管 + 修复提示词</td></tr>
+<tr><td>成本口径</td><td><b>真实账单</b>（自己调模型）</td><td>字符启发式估算 + 价表（<code>cost.js</code>）→ 非真实计费</td></tr>
+<tr><td>可观测</td><td>内置 tracing / OTel</td><td>中后台指挥台：KPI / 链 / 成本 / 产物 / 待确认 / 诊断</td></tr>
+<tr><td>协议出口</td><td>多以 MCP 作为工具接入</td><td><b>自己就是 MCP server</b>，把「编排」暴露成 7 个工具</td></tr>
+<tr><td>多步推进</td><td>模型驱动的动态 loop</td><td>阶段驱动的固定链；<b>无反思重规划</b></td></tr>
+<tr><td>依赖</td><td>npm / SDK 生态（Agent SDK、LangGraph、browser-use…）</td><td><b>零 npm 依赖</b>（Node 内置 + 原生 WebSocket CDP + 本机 CLI）</td></tr>
+<tr><td>延迟</td><td>毫秒~秒级</td><td>每步落盘 + 等外部进程 → <b>秒级~分钟级</b>（实测元宝 ~50s、CodeBuddy ~20-24s/步）</td></tr>
+</tbody></table>
+</div>
+
+<div class="card"><h2>五、结构性优势与结构性短板</h2>
+<div class="grid2">
+<div class="box"><h3 style="color:var(--ok)">优势（harness 给不了的）</h3><ul>
+<li><b>交接不丢</b>：契约 + 校验器，专治「A 查的 B 视而不见」。</li>
+<li><b>跨形态统一</b>：CLI 型（CodeBuddy）、GUI 型（元宝/VSCode）、harness 型（WorkBuddy）同一套契约。</li>
+<li><b>失败可诊断</b>：分诊表把第三方怪癖（端口占用、选择器漂移、CLI 未登录）翻译成人能修的提示。</li>
+<li><b>成本可见</b>：按项目/按日分账，超预算自动降级回单 agent（多 agent 成本是生死线）。</li>
+<li><b>可回放可审计</b>：每步 worker/耗时/成本/产物都在盘上，事后能查、能重跑。</li>
+<li><b>不被上游打断</b>：零框架依赖，SDK 升级不炸。</li>
+</ul></div>
+<div class="box"><h3 style="color:var(--danger)">短板（harness 天生有的）</h3><ul>
+<li><b>没有反思重规划</b>：链是阶段化的，模型能改链（补强①已通）但还不能像 harness 那样在每轮之间自由决定下一步动作。</li>
+<li><b>成本是估算</b>：不持模型就拿不到真实 token，只能按字符估。<b>部分已改善</b>：CodeBuddy 腿已取到 CLI 真实 usage；元宝（GUI 无 API）仍是估算。</li>
+<li><b>延迟高</b>：落盘 + 跨进程等待，不适合高频对话型 agent。</li>
+<li><b>边界处理全靠自己</b>：CDP <code>--remote-allow-origins=*</code>、<code>-p --max-turns 1 --tools ""</code>、<code>--port</code> 自动重选、元宝 <code>ensureInput()</code> 自愈——这些在成熟 harness 里都是现成的。</li>
+<li><b>最弱一环无护栏</b>：元宝没有 harness，纯 GUI 自动化，天然最脆。</li>
+<li><b>生态为零</b>：没有第三方工具、评测、trace 集成。</li>
+</ul></div>
+</div>
+</div>
+
+<div class="card"><h2>六、三项补强（已全部落地并验证）</h2>
+<table><thead><tr><th style="width:190px">补强</th><th>做法</th><th style="width:150px">补上哪根支柱</th><th style="width:80px">状态</th></tr></thead><tbody>
+<tr><td><b>① 动态编排</b><br>让主控 harness 能改流水线</td><td>新增 4 个 MCP 工具：<code>list_pipelines</code>（查链+版本历史）、<code>save_pipeline</code>（存新版本，可附变更说明）、<code>use_pipeline</code>（切换当前执行链）、<code>set_pipeline_version</code>（回滚）。MCP 工具总数 7 → <b>11</b>。</td><td>Loop Discipline（模型可调链）</td><td><span class="mark m-self">已落地</span><br><span class="dim">自测 16/16，真机回归 done</span></td></tr>
+<tr><td><b>② 真实 token</b></td><td>CodeBuddy CLI 改用 <code>--output-format json</code>，解析其 <code>result</code> 事件里的 <code>usage</code>（input/output/cache tokens）与 <code>duration_ms</code>；记账优先用真实用量，无 usage 的 worker（元宝 GUI）才回退字符估算，run-log / 成本面板标注来源。</td><td>Context Lifecycle / 成本可信度</td><td><span class="mark m-self">已落地</span><br><span class="dim">实测 6243/908 tokens</span></td></tr>
+<tr><td><b>③ 交接压缩</b></td><td>上游产物不再整段拼进下游 prompt，改压成结构化交接块（来源 / <b>交接指纹</b> / 上游摘要 / 内容上限，默认截断 4000 字）；完整性校验改为<b>指纹校验</b>，并新增<b>依赖失效</b>：上游产物变了 → 下游自动重跑；断点续跑跳过的步从 run-log 回填真实耗时/token/成本。</td><td>Context Assembly（跨应用侧）</td><td><span class="mark m-self">已落地</span><br><span class="dim">四步交接全 ✅，一处按 4000 字截断</span></td></tr>
+</tbody></table>
+<div class="note"><b>结论变化：</b>补强 ① 落地后，Relay 在「编排域」已具备 harness 的关键能力——<b>模型能自己决定下一步跑什么</b>；它与通用 harness 的剩余差距，主要是「模型驱动的动态 loop（反思重规划）」与「上下文压缩策略」这两项深度能力，而不是能力有无问题。</div>
+</div>
+
+<div class="card"><h2>七、一句话总结</h2>
+<p style="margin:0;font-size:15px;line-height:1.8">
+<b>harness 让一个模型变成能可靠干活的 agent；Relay 让几个已经在干活的 agent 变成一条<b>可交接、可审批、可查账、可回放</b>的流水线。</b><br>
+两者不是替代关系——现实分工是 <b>WorkBuddy / CodeBuddy 各自当 harness，Relay 当它们之间的胶水与治理面</b>。补强①落地后 Relay 已能在<b>编排域</b>自己改链、自己回滚；下一步真正值得追的，是 harness 那种<b>模型驱动的动态 loop</b>（反思重规划），以及把<b>上下文压缩策略</b>做深。
+</p>
+</div>
+
+<div class="foot">Relay · relay-glue · 本文档基于项目实际代码（<code>server/</code> 19 个模块、<code>blackboard/</code> 数据层、指挥台 :8770）逐项核对生成 · 零依赖自包含 HTML</div>
+</div></body></html>

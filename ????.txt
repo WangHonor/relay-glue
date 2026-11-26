@@ -1,0 +1,96 @@
+﻿Relay / relay-glue · 交付包（2026-11-26 最新版）
+================================================
+
+【这是什么】
+本机多应用联合办公的「编排总线 + 治理面」：主控 WorkBuddy 经 MCP 驱动
+CodeBuddy CLI / 元宝 / VSCode，按你配置的流水线（业务事项 + 版本）接力干活。
+零依赖：只用 Node 内置模块 + 本机已有程序（Edge / CLI），不装任何编排框架。
+
+【解压即用】
+  powershell -ExecutionPolicy Bypass -File relay-glue\start.ps1
+脚本会：设好全部 RELAY_* env → 起 Edge 元宝登录态(CDP 9333) → 起指挥台(8770)
+        → 起 SSE MCP 备用通道(18766) → 生成当日快照 cockpit.html
+脚本「位置无关」：放在任何目录都能自动定位代码目录（旁边没有 server\ 就回退规范目录）。
+
+【上手前必须具备的 4 个前提】
+1) Node v24（本机 C:\Program Files\nodejs\node.exe）
+2) WorkBuddy 挂上本 MCP server（专家·技能·连接器 → 连接器 → 自定义连接器 → 配置 MCP）
+   配置示例（Windows）：
+     "relay-glue": {
+       "type": "stdio",
+       "command": "C:\\Program Files\\nodejs\\node.exe",
+       "args": ["<解压目录>\\relay-glue\\server\\mcp-adapter.js"],
+       "env": { "RELAY_YUANBAO_ENABLED": "1", "RELAY_VSCODE_OPEN": "1",
+                "RELAY_CODEB_BIN": "C:\\Users\\Administrator\\AppData\\Roaming\\npm\\codebuddy.cmd",
+                "RELAY_YB_WAIT": "45000" },
+       "autoStart": true, "timeout": 120000, "disabled": false
+     }
+   保存后必须点「信任」才会变绿。（若你的版本不认 stdio，改 type:sse + url:http://127.0.0.1:18766/sse）
+3) CodeBuddy CLI 已登录：npm install -g @tencent-ai/codebuddy-code → 运行 codebuddy → 输入 /login
+   （PowerShell 里请用 codebuddy.cmd，.ps1 会被执行策略拦）
+4) 元宝已登录：node relay-glue\server\yuanbao-launch.js → 弹 Edge 扫码登录一次（profile 持久化，过期再跑）
+
+【在 WorkBuddy 里驱动全链】
+  调用 relay-glue 的 run_chain（fresh=true）；若返回 awaiting_confirmation，就对其 pending
+  逐个调 approve_task，再调 run_chain 续跑，直到 done。
+更完整的自闭环规则见 relay-glue\WorkBuddy闭环提示词.md（整段贴进对话即可）。
+
+【11 个 MCP 工具】
+  跑链路：dispatch_task / run_chain
+  审批闸门：approve_task / list_pending
+  诊断：get_repair_prompt / read_result / read_runlog
+  动态编排：list_pipelines / save_pipeline / use_pipeline / set_pipeline_version
+
+【核心能力】
+· 交接质量：上游产物压成结构化交接块（来源/指纹/摘要/4000字上限），完整性用「指纹」校验；
+  上游产物变了 → 下游自动重跑（依赖失效），不会拿旧产物接着用。
+· 成本：优先用 worker CLI 回传的真实 usage（CodeBuddy 已接通），元宝(GUI无API)才估算；
+  按项目分账，超预算自动降级回单 agent。
+· 安全：三档闸门（拦截/待确认/自动放行）；操作型腿默认人工确认；不可逆词直接 block。
+· 可观测：指挥台四视图（运行总览/身份角色/流水线编排/一键接管），含成本、待确认、
+  失败诊断与「运行时代码」标识（路径/端口/启动时间，一眼分辨新旧实例）。
+· 版本管理：流水线按业务事项归类，每次保存留版本，可查看/回滚/删除。
+
+【离线自检（不需要任何外部环境）】
+  $env:RELAY_DRY_RUN='1'; node relay-glue\test\repair-check.js            # 失败分诊 4/4
+  $env:RELAY_DRY_RUN='1'; node relay-glue\test\dynamic-orchestration-check.js  # 动态编排 16/16
+  $env:RELAY_DRY_RUN='1'; node relay-glue\test\pipeline-http-check.js     # 流水线 HTTP 闭环
+  node relay-glue\test\cdp-proof.js                                       # CDP 引擎自证（需 Edge）
+  node relay-glue\test\sse-probe.js                                       # SSE 传输自证（需空闲端口）
+
+【踩过的坑（已在代码里处理）】
+· CodeBuddy 默认交互模式复用固定端口 → 用 -p --max-turns 1 --tools "" --port <空闲>；
+  端口冲突由适配器自动换端口重试。
+· WorkBuddy 自带的 codebuddy 缺 ../dist/codebuddy 会崩 → 取用顺序：显式 env > PATH > 内置兜底。
+· 元宝 UI 变�� / 会卡在「追问澄清」子态 → ensureInput() 自动重置到新对话再试。
+· 端口上若跑的是旧实例（甚至别的目录的副本）→ start.ps1 会探针识别并自动让位到下一个空闲端口；
+  要回到标准端口请用【管理员】PowerShell 执行 start.ps1 -Stop 后重跑（非管理员无法结束管理员进程）。
+
+
+【包内读文档（双击即可看，均为自包含 HTML）】
+  交付说明.html                              一页版：现状 / 上手 / 待办 / 红线
+  技术架构.html                              技术栈 + 分层架构 + 数据流 + 端口拓扑
+  Relay与AgentHarness对比.html              与通用 agent harness 的定位对比（五支柱逐项）
+  设计简报-WorkBuddy联合办公主控.html       最终设计简报（方向如何一步步定下来的）
+  WorkBuddy闭环提示词.md                    整段贴进 WorkBuddy 即得自闭环主控
+  Test-B-WorkBuddy清单.md                   挂 MCP + 验承重假设的逐步指引
+
+【WorkBuddy 技能（一句话触发跑全链）】
+包内 skill\relay-glue\ 是已装好的 WorkBuddy 技能。装到本机：
+  1) 复制 skill\relay-glue 整个目录到  %USERPROFILE%\.workbuddy\skills\
+  2) 重启 WorkBuddy（它会重建技能清单）
+  3) 之后在对话里说「跑全链」「联合办公」「派活」「用多个智能体一起干」等即可触发；
+     技能会自动调用 relay-glue 的 run_chain / approve_task / list_pipelines / save_pipeline 等 11 个 MCP 工具。
+  技能内含：触发协议、审批纪律、失败分诊表、环境前提；references\troubleshooting.md 是排障速查。
+【目录】
+  server/   20 个 .js：core(11工具) / chain / handoff / pipeline / roles / safety / cost /
+            repair / adapters / yuanbao* / browser-cdp / cockpit* / mcp-adapter / sse-server
+  test/     8 个自检脚本
+  blackboard/ roles.json(角色卡) pipeline.json(流水线+版本) config.json(预算/项目/安全)
+             tasks/example-001(种子任务)  runs/(运行时生成，首跑自动重建)
+  skill/relay-glue/  WorkBuddy 技能（SKILL.md + references/troubleshooting.md）
+  根目录     start.ps1 README.md cockpit.html 交付说明.html 技术架构.html
+             Relay与AgentHarness对比.html Test-B-WorkBuddy清单.md WorkBuddy闭环提示词.md
+
+【不包含】
+  所有 *.bak-* 备份、运行时 runs/ 日志与任务目录、.relay-run.json —— 首跑会自动重建。

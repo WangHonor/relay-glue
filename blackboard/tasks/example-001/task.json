@@ -1,0 +1,8 @@
+{
+  "task_id": "example-001",
+  "role": "code",
+  "goal": "把 blackboard/tasks/example-001/input.md 里的调研要点整理成一篇初稿大纲（含小标题与每节要点）。",
+  "inputs": ["blackboard/tasks/example-001/input.md"],
+  "expected_output": "markdown 大纲，落盘到 result.md 的 ## Output 段",
+  "constraints": "只读本任务目录；不联网；数据不出本机；输出中文。"
+}

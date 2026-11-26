@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Relay · 技术栈与架构</title>
+<style>
+:root{--bg:#f0f2f5;--card:#fff;--text:#1f2329;--muted:#8a9099;--border:#eceef1;--line:#f2f3f5;--blue:#1677ff;--ok:#16a34a;--warn:#d9822b;--danger:#dc2626;--purple:#7c5cff}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;margin:0;font-size:14px;line-height:1.6}
+.wrap{max-width:1120px;margin:0 auto;padding:24px}
+h1{font-size:22px;margin:0 0 4px}
+.lead{color:var(--muted);font-size:13px;margin-bottom:20px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.card>h2{font-size:16px;margin:0 0 14px;padding-left:10px;border-left:3px solid var(--blue)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{background:#f5f8ff;border:1px solid #dfe8ff;color:#2b4a86;border-radius:8px;padding:6px 12px;font-size:13px}
+.chip b{color:var(--blue)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:500;background:#fafbfc}
+tr:last-child td{border-bottom:none}
+code{background:#f2f3f5;border-radius:5px;padding:1px 6px;font-family:'SFMono-Regular',Consolas,monospace;font-size:12px}
+.mono{font-family:'SFMono-Regular',Consolas,monospace;font-size:12px;color:#3a3f45}
+.dim{color:var(--muted);font-size:12px}
+/* 分层架构 */
+.layers{display:flex;flex-direction:column;gap:10px}
+.layer{border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#fafbfc;position:relative}
+.layer .lt{font-weight:700;font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.layer .badge{font-size:11px;font-weight:600;color:#fff;border-radius:6px;padding:2px 8px}
+.mods{display:flex;flex-wrap:wrap;gap:8px}
+.mod{background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px}
+.mod b{font-family:Consolas,monospace;color:var(--blue)}
+.mod .r{color:var(--muted);font-size:11px}
+.l-ctrl .badge{background:var(--purple)} .l-trans .badge{background:#0ea5e9} .l-core .badge{background:var(--blue)}
+.l-gov .badge{background:var(--warn)} .l-adapter .badge{background:var(--ok)} .l-drive .badge{background:#e11d48}
+.l-bus .badge{background:#64748b} .l-obs .badge{background:#0891b2}
+.flow{counter-reset:step;display:flex;flex-direction:column;gap:8px}
+.flow .step{display:flex;gap:10px;align-items:flex-start}
+.flow .step:before{counter-increment:step;content:counter(step);flex:none;width:22px;height:22px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;font-weight:600}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+.kv:last-child{border-bottom:none}
+.kv span{color:var(--muted)}
+.note{background:#fff8ec;border:1px solid #f0d9a8;border-radius:8px;padding:10px 12px;font-size:13px;color:#7a5a1a}
+.foot{color:var(--muted);font-size:12px;text-align:center;margin-top:8px}
+</style></head><body><div class="wrap">
+<h1>Relay · 技术栈与技术架构</h1>
+<div class="lead">本机多应用联合办公指挥台 · 零依赖定制 · 项目路径 <code>D:\Tools\qianwen\relay-glue</code></div>
+
+<div class="card"><h2>一、技术栈</h2>
+<div class="chips">
+<div class="chip">运行时 <b>Node.js v24</b>（仅内置模块）</div>
+<div class="chip">协议 <b>MCP / JSON-RPC 2.0</b></div>
+<div class="chip">传输 <b>stdio（换行分隔）</b> + <b>SSE</b></div>
+<div class="chip">浏览器自动化 <b>CDP over 原生 WebSocket</b></div>
+<div class="chip">网络 <b>原生 fetch / WebSocket</b>（无 axios）</div>
+<div class="chip">数据 <b>JSON 文件黑板</b> + <b>JSONL run-log</b></div>
+<div class="chip">前端 <b>自包含 HTML + 原生 JS</b>（无框架）</div>
+<div class="chip">Web 服务 <b>node:http</b>（无 Express）</div>
+<div class="chip">Worker <b>WorkBuddy / CodeBuddy CLI / 元宝 / VSCode</b></div>
+</div>
+<p class="dim" style="margin:12px 0 0">设计取向：<b>零 npm 依赖、不联网安装、不引入编排框架（LangGraph/CrewAI/AutoGen/Playwright/Puppeteer）</b>；仅用 Node 内置模块 + 本机已有程序（Edge / CLI）搭最小闭环。</p>
+</div>
+
+<div class="card"><h2>二、分层架构</h2>
+<div class="layers">
+<div class="layer l-ctrl"><div class="lt"><span class="badge">主控层</span>WorkBuddy（外部桌面 App）</div>
+<div class="mods"><div class="mod">经 <b>MCP</b> 点名调用 <span class="r">11 个工具：run_chain / dispatch_task / approve_task / list_pending / get_repair_prompt / read_result / read_runlog / list_pipelines / save_pipeline / set_pipeline_version / use_pipeline</span></div></div></div>
+
+<div class="layer l-trans"><div class="lt"><span class="badge">传输层</span>把 core.handleMessage 接成不同通道</div>
+<div class="mods"><div class="mod"><b>mcp-adapter.js</b><span class="r"> stdio 换行 JSON-RPC</span></div><div class="mod"><b>sse-server.js</b><span class="r"> SSE/HTTP 备用通道 :18766</span></div></div></div>
+
+<div class="layer l-core"><div class="lt"><span class="badge">编排 / MCP 逻辑层</span>传输无关的核心</div>
+<div class="mods"><div class="mod"><b>core.js</b><span class="r"> dispatch + 11 个 MCP 工具 + handleMessage</span></div><div class="mod"><b>chain.js</b><span class="r"> 接力编排：交接压缩/指纹校验/依赖失效/重试/续跑</span></div><div class="mod"><b>handoff.js</b><span class="r"> 跨 agent 交接块 + 指纹</span></div><div class="mod"><b>pipeline.js</b><span class="r"> 业务事项 + 版本管理</span></div><div class="mod"><b>roles.js</b><span class="r"> 角色/身份卡 persona 注入</span></div></div></div>
+
+<div class="layer l-gov"><div class="lt"><span class="badge">治理层</span>横切在 dispatch 前后</div>
+<div class="mods"><div class="mod"><b>safety.js</b><span class="r"> 安全闸门：拦截/待确认/放行</span></div><div class="mod"><b>cost.js</b><span class="r"> token 估算 + ¥记账 + 超预算降级单 agent</span></div><div class="mod"><b>repair.js</b><span class="r"> 失败分诊 + 生成异常修复提示词</span></div></div></div>
+
+<div class="layer l-adapter"><div class="lt"><span class="badge">适配层</span>角色路由到具体应用</div>
+<div class="mods"><div class="mod"><b>adapters.js</b><span class="r"> ADAPTERS: research→元宝 / code→CodeBuddy / editor→VSCode / single→回落</span></div></div></div>
+
+<div class="layer l-drive"><div class="lt"><span class="badge">能力 / 驱动层</span>真正调用外部程序</div>
+<div class="mods"><div class="mod"><b>browser-cdp.js</b><span class="r"> 零依赖 CDP 引擎（WebSocket+fetch 驱动 Edge）</span></div><div class="mod"><b>yuanbao.js</b><span class="r"> 元宝问答：打字→回车→轮询读答案 + ensureInput 自愈</span></div><div class="mod"><b>CodeBuddy CLI</b><span class="r"> headless -p + stdin + 空闲 --port</span></div><div class="mod"><b>VSCode code CLI</b><span class="r"> detached 打开审阅</span></div></div></div>
+
+<div class="layer l-bus"><div class="lt"><span class="badge">总线 / 数据层</span>blackboard/ 文件黑板</div>
+<div class="mods"><div class="mod"><b>tasks/&lt;id&gt;/</b><span class="r"> task.json 契约 + input/result.md</span></div><div class="mod"><b>runs/run-log.jsonl</b><span class="r"> 每步 worker/ok/耗时/成本</span></div><div class="mod"><b>roles.json / pipeline.json / config.json</b><span class="r"> 角色卡 / 流水线版本 / 预算·项目·安全</span></div></div></div>
+
+<div class="layer l-obs"><div class="lt"><span class="badge">可观测 / 控制面</span>指挥台</div>
+<div class="mods"><div class="mod"><b>cockpit.js</b><span class="r"> 中后台渲染（侧栏4视图）</span></div><div class="mod"><b>cockpit-server.js</b><span class="r"> :8770 控制台：接管/角色/流水线/系统卡/诊断/运行时代码标识</span></div></div></div>
+</div>
+</div>
+
+<div class="card"><h2>三、模块清单与依赖</h2>
+<table><thead><tr><th>模块</th><th>职责</th><th>依赖</th></tr></thead><tbody>
+<tr><td><code>core.js</code></td><td>传输无关 MCP 逻辑：读契约→安全闸门→成本闸门→调 adapter→写 result+run-log；定义 <b>11 个 MCP 工具</b>（含动态编排 4 个）</td><td>adapters, safety, cost, roles, repair, pipeline</td></tr>
+<tr><td><code>chain.js</code></td><td>接力编排器：按流水线逐步跑、<b>交接压缩+指纹校验</b>、依赖失效自动重跑、重试、断点续跑、停链生成修复提示</td><td>core, adapters, repair, pipeline, handoff</td></tr>
+<tr><td><code>handoff.js</code></td><td>跨 agent 交接层：把上游产物压成结构化交接块（来源/指纹/摘要/内容上限）并做指纹校验</td><td>—</td></tr>
+<tr><td><code>adapters.js</code></td><td>角色路由 + 黑板读写（BB / readTask / writeResult / appendLog / ADAPTERS）；CodeBuddy 走 <code>--output-format json</code> 取<b>真实 usage</b></td><td>yuanbao</td></tr>
+<tr><td><code>safety.js</code></td><td>敏感词/不可逆识别 + 人工确认（block/confirm/auto）；分类前剥离注入上下文防误拦</td><td>adapters</td></tr>
+<tr><td><code>cost.js</code></td><td>token 估算 + ¥ 记账 + 预算判断 + 超预算降级单 agent</td><td>adapters</td></tr>
+<tr><td><code>repair.js</code></td><td>失败分诊表归类 + 生成可贴回主控的中文修复提示词</td><td>adapters</td></tr>
+<tr><td><code>roles.js</code></td><td>角色/身份卡 CRUD + persona 前缀生成</td><td>adapters</td></tr>
+<tr><td><code>pipeline.js</code></td><td>流水线（业务事项 + 版本历史 + 当前版本）CRUD + 步骤→role 解析</td><td>adapters, roles</td></tr>
+<tr><td><code>browser-cdp.js</code></td><td>零依赖 CDP 客户端（原生 WebSocket/fetch；--remote-allow-origins；发送即写、超时兜底）</td><td>—</td></tr>
+<tr><td><code>yuanbao.js</code></td><td>元宝网页问答：打字→回车→轮询读答案；ensureInput 自愈澄清子态</td><td>browser-cdp</td></tr>
+<tr><td><code>mcp-adapter.js</code> / <code>sse-server.js</code></td><td>stdio / SSE 两种 MCP 传输，共用 core.handleMessage</td><td>core</td></tr>
+<tr><td><code>cockpit.js</code> / <code>cockpit-server.js</code></td><td>指挥台渲染 + 本地控制台（接管/角色/流水线/系统卡/诊断/配置）</td><td>core, safety, cost, roles, pipeline, adapters</td></tr>
+</tbody></table>
+</div>
+
+<div class="card"><h2>四、一次 run_chain 的数据流</h2>
+<div class="flow">
+<div class="step">WorkBuddy 经 MCP 调 <code>run_chain{fresh}</code> → <code>core</code> 触发 <code>chain.js</code>。</div>
+<div class="step"><code>chain.js</code> 读 <code>pipeline.js</code> 的“当前流水线·当前版本”得到步骤序列。</div>
+<div class="step">每步：把 <code>roles.js</code> 身份卡 + 上游 <code>result.md</code> 注入下游 goal，写 <code>tasks/&lt;id&gt;/task.json</code>。</div>
+<div class="step"><code>core.dispatch</code> 先过 <code>safety</code>（命中不可逆→拦截；操作型腿→待确认）。</div>
+<div class="step">再过 <code>cost</code>（超预算→改走单 agent 回落）。</div>
+<div class="step"><code>adapters</code> 按 role 调对应 worker（元宝/CodeBuddy/VSCode），worker 产结果。</div>
+<div class="step">写 <code>result.md</code> + 追 <code>run-log.jsonl</code> + 记 <code>cost.json</code>；做上下文交接完整性校验。</div>
+<div class="step">遇待确认→返回 pending，WorkBuddy <code>approve_task</code> 后续跑；遇失败→<code>repair</code> 生成修复提示词并停链上报。</div>
+<div class="step">指挥台 <code>cockpit</code> 实时读 runs/status 展示 KPI、链、成本、待确认、诊断。</div>
+</div>
+</div>
+
+<div class="card"><h2>五、进程与端口拓扑</h2>
+<div class="grid2">
+<div class="card" style="margin:0;box-shadow:none"><div class="kv"><span>指挥台控制台</span><b>:8770（cockpit-server）</b></div><div class="kv"><span>SSE MCP 备用</span><b>:18766（sse-server）</b></div><div class="kv"><span>Edge CDP 调试</span><b>:9333（元宝登录态）</b></div><div class="kv"><span>stdio MCP</span><b>由 WorkBuddy 拉起 mcp-adapter</b></div></div>
+<div><div class="note"><b>一键启动</b>：<code>start.ps1</code> 设好 <code>RELAY_*</code> env → 起 Edge 登录态 + 指挥台 + SSE + 当日快照；<code>-Stop</code> 按端口反查真实 PID 停止；位置无关、UTF-8 BOM。<br><b>端口被旧实例占用时</b>：脚本探针该端口的实例（<code>/api/system</code>、<code>/info</code>），发现是旧代码则自动让位到下一个空闲端口；要回到标准端口需用管理员权限执行 <code>-Stop</code>。</div></div>
+</div>
+</div>
+
+<div class="card"><h2>六、关键设计</h2>
+<table><thead><tr><th>主题</th><th>做法</th></tr></thead><tbody>
+<tr><td>差异化：交接质量</td><td>结构化任务契约 + 上游产物压成<b>结构化交接块</b>（来源/指纹/摘要/内容上限）+ <b>指纹校验</b>完整性（防“传话游戏”）</td></tr>
+<tr><td>上下文生命周期</td><td>交接默认截断 4000 字；<b>依赖失效</b>：上游产物变 → 下游自动重跑；断点续跑跳过的步从 run-log 回填真实耗时/token/成本</td></tr>
+<tr><td>角色协作</td><td>persona 身份卡注入 worker 提示词；流水线按业务事项编排、版本化可回滚</td></tr>
+<tr><td><b>动态编排（模型可改链）</b></td><td>MCP 暴露 11 工具，含 <code>list_pipelines</code>/<code>save_pipeline</code>/<code>use_pipeline</code>/<code>set_pipeline_version</code> → 主控(harness)能自编链、存版本、切链、回滚</td></tr>
+<tr><td>安全红线</td><td>不可逆/高危词直接拦截；操作型腿默认人工确认；分类前剥离注入上下文防误拦</td></tr>
+<tr><td>成本生死线</td><td>优先用 worker CLI 的<b>真实 usage</b>（CodeBuddy 已接通），无则字符估算；按项目分账、超预算自动降级单 agent</td></tr>
+<tr><td>可观测 / 接管</td><td>run-log + status + 指挥台四视图；断点续跑、逐步重跑/忽略/批准、失败只读诊断</td></tr>
+<tr><td>端口与实例可辨</td><td>start.ps1 探针端口上的实例（<code>/api/system</code>、<code>/info</code> 返回“跑的是哪份代码”），旧实例自动让位到下一个空闲端口；指挥台显示<b>运行时代码路径/端口/启动时间</b></td></tr>
+<tr><td>元宝零依赖自动化</td><td>原生 WebSocket 驱动 Edge CDP；ensureInput 自愈“追问/澄清”子态；失败即停链上报</td></tr>
+<tr><td>CodeBuddy 编排</td><td>headless <code>-p --max-turns 1 --tools "" --output-format json --port &lt;空闲&gt;</code> + stdin 传 prompt；取用顺序 显式 &gt; PATH &gt; 内置兜底</td></tr>
+<tr><td>自愈与幂等</td><td>端口冲突自动换空闲重试；断点续跑跳过已 ok；停链生成修复提示词</td></tr>
+</tbody></table>
+</div>
+
+<div class="card"><h2>七、外部依赖与本机前提</h2>
+<div class="grid2">
+<div class="kv"><span>运行时</span><b>Node v24（C:\Program Files\nodejs）</b></div>
+<div class="kv"><span>主控</span><b>WorkBuddy（MCP 连接器 ~/.workbuddy/mcp.json）</b></div>
+<div class="kv"><span>编码 worker</span><b>CodeBuddy CLI（npm 全局，需 /login）</b></div>
+<div class="kv"><span>调研 worker</span><b>元宝（网页版，CDP 驱动，需扫码登录）</b></div>
+<div class="kv"><span>排版 worker</span><b>VSCode（code CLI）</b></div>
+<div class="kv"><span>浏览器</span><b>Edge（Program Files (x86)）</b></div>
+</div>
+<p class="dim" style="margin:10px 0 0">除以上本机程序外<b>无第三方库</b>；MCP/CDP/HTTP 全部手写，仅用 Node 内置模块。</p>
+</div>
+
+<div class="foot">Relay · relay-glue 技术架构 · 本地生成 · 与代码一致</div>
+</div></body></html>
